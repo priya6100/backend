@@ -4,7 +4,7 @@
   "description": "backend for soulbyindian",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon index.js"
+    "start": "node index.js"
   },
   "keywords": [
     "mern",
@@ -28,5 +28,13 @@
     "shortid": "^2.2.16",
     "slugify": "^1.5.3"
   },
-  "devDependencies": {}
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/priya6100/backend.git"
+  },
+  "bugs": {
+    "url": "https://github.com/priya6100/backend/issues"
+  },
+  "homepage": "https://github.com/priya6100/backend#readme"
 }
