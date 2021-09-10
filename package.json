@@ -36,5 +36,8 @@
   "bugs": {
     "url": "https://github.com/priya6100/backend/issues"
   },
+  "engines": {
+    "node": "14.x"
+  },
   "homepage": "https://github.com/priya6100/backend#readme"
 }
