@@ -20,6 +20,18 @@ const productSchema = new mongoose.Schema({
         type: Number,
         required: true
     },
+    sizeSquantity: {
+          type: Number,
+          required: true
+    },
+    sizeMquantity: {
+        type: Number,
+        required: true
+  },
+  sizeXLquantity: {
+    type: Number,
+    required: true
+},
     quantity:{
         type: Number,
         required: true

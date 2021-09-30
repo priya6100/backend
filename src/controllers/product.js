@@ -21,6 +21,10 @@ exports.createProduct = (req, res) => {
     slug: slugify(name),
     price,
     quantity,
+    sizeSquantity,
+    sizeMquantity,
+    sizeXLquantity,
+
     description,
     productPictures,
     category,
