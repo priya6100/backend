@@ -1,137 +1,97 @@
-const Wish = require('../models/wishlist');
-exports.addItemToWishlist = (req, res) =>{
+const Wishlist = require('../models/wishlist');
 
-
-Wish.findOne({user: req.user._id})
-.exec((error, wish) =>{
-    if(error) return res.status(400).json({error});
-    if(wish){
-       //update cart
-      const product = req.body.wishListItems.product;
-      const item = wish.wishListItems.find(c => c.product == product)
-let condition, update;
-if(item){
-    condition = {"user": req.user._id, "wishListItems.product": product};
-    update = {
-        
-        "$set": {
-            "wishListItems.$":{
-                ...req.body.wishListItems,
-               
-            }
-        }
-
-       };
-
-
-}else{
-    condition = {user: req.user._id};
-    update = {
-        
-        "$push": {
-            "wishListItems":req.body.wishListItems
-        }
-
-       };
-
+function runUpdate(condition, updateData) {
+  return new Promise((resolve, reject) => {
+    Wish.findOneAndUpdate(condition, updateData, {upsert: true})
+    .then(result => resolve())
+    .catch(err => reject(err))
+  });
 }
-
-//if case
- 
-Wish.findOneAndUpdate(condition, update)
-   .exec((error, _wish) => {
+exports.addItemToWishlist = (req, res) =>{
+  Wishlist.findOne({ user: req.user._id}).exec((error, wishlist) =>{
     if(error) return res.status(400).json({error});
-    if(_wish){
-        return res.status(201).json({message: 'alredy there'})
-    }
-   });
+    if(wishlist){
+       //update cart
+       let promiseArray = [];
 
-        //  res.status(200).json({message: cart})
+       req.body.wishlistItems.forEach(wishlistItem => {
+         const product = wishlistItem.product;
+         const item = wishlist.wishlistItems.find(w => w.product == product);
+         let condition, update;
 
-    } else{
-//create new cart
+         if(item){
+          condition = {user: req.user._id, "wishlistItems.product": product};
+          update = {              
+              "$set": {
+                  "wishlistItems.$": wishlistItem,
+              },
+      
+          };    
+        }else{
+          condition = {user: req.user._id};
+          update = {              
+              "$push": {
+                  "wishlistItems": wishlistItem,
+              } , 
+          };
+        }
+        promiseArray.push(runUpdate(condition, update));
+      });
 
-        const wish = new Wish({
-            user: req.user._id,
-            wishListItems: [req.body.wishListItems]
-        });
-        
-        
-        wish.save((error, wish) =>{
-            if(error) return res.status(400).json({error});
-            if(wish){
-                return res.status(201).json({wish})
-            }
-        });
-        
+      Promise.all(promiseArray)
+      .then(response => res.status(201).json({ response }))
+      .catch(error => res.status(400).json({ error }));
+    } else {
+    
+      //if wishlist not exist then create a new wishlist
+    const wishlist = new Wishlist({
+      user: req.user._id,
+      wishlistItems: req.body.wishlistItems
+    });
 
-    }
+    wishlist.save((error, wishlist) => {
+      if (error) return res.status(400).json({ error });
+      if (wishlist) {
+        return res.status(201).json({ wishlist });
+      }
+    });
+  }
 });
-
-
 };
 
-exports.getWishlistItem = (req, res) => {
-  //const { user } = req.body.payload;
-  //if(user){
-  Wish.findOne({ user: req.user._id })
-    .populate('wishListItems.product', '_id name price productPictures')
-    .exec((error, wish) => {
-      if (error) return res.status(400).json({ error });
-      if (wish) {
-        let wishListItems = {};
-        wish.wishListItems.forEach((item, index) => {
+exports.getWishlistItems = (req, res) => {
 
-          wishListItems[item.product._id.toString()] = {
+  Wishlist.findOne({ user: req.user._id })
+    .populate('wishlistItems.product', '_id name price productPictures')
+    .exec((error, wishlist) => {
+      if (error) return res.status(400).json({ error });
+      if (wishlist) {
+        let wishlistItems = {};
+        wishlist.wishlistItems.forEach((item, index) => {
+          wishlistItems[item.product._id.toString()] = {
             _id: item.product._id.toString(),
             name: item.product.name,
             img: item.product.productPictures[0].img,
             price: item.product.price,
-           
+            qty: item.quantity,
+            
           };
-          
-        });
-          
-
-        console.log(wishListItems);
-
-        res.status(200).json({ wishListItems });
+        }); 
+        res.status(200).json({ wishlistItems });
       }
     });
   //}
 };
 
-// exports.removeWishlistItems = (req, res) => {
-//   const {wishListItems.productId}  = req.body.payload;
-//   console.log(req.body);
-//   if (wishListItems) {
-
-//     Wish.updateOne(
-//       { user: req.user._id },
-//       {
-//         $pull: {
-//           wishListItems: {
-//             product: wishListItems,
-//           },
-//         },
-//       }
-//     ).exec((error, result) => {
-//       if (error) return res.status(400).json({ error });
-//       if (result) {
-//         res.status(202).json({ result });
-//       }
-//     });
-//   }
-// };
-
+// new update remove cart items
 exports.removeWishlistItems = (req, res) => {
   const { productId } = req.body.payload;
   if (productId) {
-    wish.update(
-  
+    Wishlist.updateOne(
+      { user: req.user._id },
       {
         $pull: {
-          wishListItems: {
+          wishlistItems: {
             product: productId,
           },
         },
@@ -143,4 +103,4 @@ exports.removeWishlistItems = (req, res) => {
       }
     });
   }
-};
+}; 

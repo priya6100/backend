@@ -1,13 +1,16 @@
 const User = require("../models/user");
 const jwt = require("jsonwebtoken");
+const crypto = require('crypto');
 const bcrypt = require("bcrypt");
 const shortid = require("shortid");
-const {OAuth2Client} = require('google-auth-library');
+const { OAuth2Client } = require('google-auth-library');
 // const fetch = require('node-fetch');
-const mailgun = require("mailgun-js");
-const DOMAIN = 'sandbox8f097314e0454f61babd1b52952defab.mailgun.org';
-const mg = mailgun({apiKey: "18d3ecd0a01de8a8f35e880f7ec96d2f-90346a2d-21d136ce", domain: DOMAIN});
-
+// const mailgun = require("mailgun-js");
+// const DOMAIN = 'sandbox8f097314e0454f61babd1b52952defab.mailgun.org';
+// const mg = mailgun({ apiKey: process.env.MAILGUN_APIKEY, domain: DOMAIN });
+const nodemailer = require('nodemailer');
+const { response } = require("express");
+const bodyParser = require('body-parser')
 
 const client = new OAuth2Client("800480683042-qdqo4a9hi5dboglr97e4tvmvab0er1lu.apps.googleusercontent.com")
 const generateJwtToken = (_id, role) => {
@@ -24,11 +27,14 @@ exports.signup = (req, res) => {
       return res.status(400).json({
         error: "User already registered",
       });
-    const { firstName, lastName, email, password } = req.body;
+
+      
+
+    const { email, password } = req.body;
     const hash_password = await bcrypt.hash(password, 10);
     const _user = new User({
-      firstName,
-      lastName,
+      
+      
       email,
       hash_password,
       username: shortid.generate(),
@@ -43,11 +49,11 @@ exports.signup = (req, res) => {
 
       if (user) {
         const token = generateJwtToken(user._id, user.role);
-        const { _id, firstName, lastName, email, role, fullName } = user;
+        const {  _id, name, email} = user;
 
         return res.status(201).json({
           token,
-          user: { _id, firstName, lastName, email, role, fullName },
+          user: {  _id, name, email },
         });
       }
     });
@@ -58,51 +64,52 @@ exports.signup = (req, res) => {
 
 
 
-exports.googlelogin = (req, res ) => {
-  const {tokenId} = req.body;
+exports.googlelogin = (req, res) => {
+  const { tokenId } = req.body;
 
-  client.verifyIdToken({idToken: tokenId,audience: "800480683042-qdqo4a9hi5dboglr97e4tvmvab0er1lu.apps.googleusercontent.com"}).then(res =>{
-    const {email_verified, name, email} = res.payload;
-   if(email_verified){
-     User.findOne({email}).exec((err,user) => {
-       if(err){
-         return res.status(400).json({
-           error: "Something went wrong..."
-         })
-            } else {
-              if(user) {
-                const token = jwt.sign({_id: user._id}, process.env.JWT_SECRET, {expiresIn: '7d'})
-                const {_id, name, email} = user;
+  client.verifyIdToken({ idToken: tokenId, audience: "800480683042-qdqo4a9hi5dboglr97e4tvmvab0er1lu.apps.googleusercontent.com" }).then(response => {
+    const { name, email } = response.payload;
+    if (email_verified) {
+      User.findOne({ email }).exec((err, user) => {
+        if (err) {
+          return res.status(400).json({
+            error: "Something went wrong..."
+          })
+        } else {
+          if (user) {
+            const token = jwt.sign({ _id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' })
+            const { _id, name, email } = user;
+
+            res.json({
+              token,
+              user: { _id, name, email }
+            })
+          } else {
+            let password = email + process.env.JWT_SECRET;
+            let newUser = new User({ name, email, password });
+            newUser.save((err, data) => {
+              if(err) {
+                return res.status(400).json({
+                  error: "Something went wrong..."
+                })
+
+
+              }
+              const token = jwt.sign({ _id: data._id }, process.env.JWT_SECRET, { expiresIn: '7d' })
+              const { _id, name, email } = newUser;
 
               res.json({
-                 token,
-                 user: {_id, name, email}
-                })
-         } else {
-           let password = email+process.env.JWT_SECRET;
-          let newUser = new User({name, email, password});
-          newUser.save((err, data) =>{
-            if(err) {
-               return res.status(400).json({
-              error: "Something went wrong..."
-          })
-
-         }
-         const token = jwt.sign({_id: data._id}, process.env.JWT_SECRET, {expiresIn: '7d'})
-          const {_id, name, email} = newUser;
-
-          res.json({
-            token,
-            user: {_id, name, email}
-          })
-     })
-   }
-  }
-    // console.log(res.payload);
+                token,
+                user: { _id, name, email}
+              })
+            })
+          }
+        }
+        
+      })
+    }
   })
-} 
-  })
-  console.log()
+  console.log(response.payload);
 }
 
 
@@ -112,10 +119,42 @@ exports.googlelogin = (req, res ) => {
 
 
 
-
-
-
-
+exports.resetPassword = (req, res)=>{
+  crypto.randomBytes(32,(err,buffer)=>{
+      if(err){
+          console.log(err)
+      }
+      const token = buffer.toString("hex");
+      console.log(token);
+      User.findOne({email:req.body.email})
+      .then(user=>{
+          if(!user){
+              return res.status(422).json({error:"User dont exits with that email"})
+          }
+          user.resetToken = token;
+          user.expireToken = Date.now() + 3600000;
+          let transporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+              user: 'priyaranjan@grapsnextsocial.com',
+              pass: 'fsshvmmpiqhdjzqg'
+            }
+          });
+          user.save().then(() => {
+              transporter.sendMail({
+                  to: user.email, 
+                  from: "priyaranjan@grapsnextsocial.com", 
+                  subject: "password reset 123",
+                  html: `
+                  <p>You requested for password reset.</p>
+                  <h5>Click in this <a href="http://localhost:3000/reset-password/${user._id}/${token}">link</a> to reset password</h5>
+                  `
+              })
+              res.json({message: "check your email"});
+          });
+      });
+  })
+}
 
 
 
@@ -160,83 +199,6 @@ exports.signin = (req, res) => {
 
 
 
-exports.forgotPasswordController = (req, res) => {
-  const { email } = req.body;
-  const errors = validationResult(req);
-
-  if (!errors.isEmpty()) {
-    const firstError = errors.array().map(error => error.msg)[0];
-    return res.status(422).json({
-      errors: firstError
-    });
-  } else {
-    User.findOne(
-      {
-        email
-      },
-      (err, user) => {
-        if (err || !user) {
-          return res.status(400).json({
-            error: 'User with that email does not exist'
-          });
-        }
-
-        const token = jwt.sign(
-          {
-            _id: user._id
-          },
-          process.env.JWT_RESET_PASSWORD,
-          {
-            expiresIn: '10m'
-          }
-        );
-
-        const emailData = {
-          from: process.env.EMAIL_FROM,
-          to: email,
-          subject: `Password Reset link`,
-          html: `
-                    <h1>Please use the following link to reset your password</h1>
-                    <p>${process.env.CLIENT_URL}/users/password/reset/${token}</p>
-                    <hr />
-                    <p>This email may contain sensetive information</p>
-                    <p>${process.env.CLIENT_URL}</p>
-                `
-        };
-
-        return user.updateOne(
-          {
-            resetPasswordLink: token
-          },
-          (err, success) => {
-            if (err) {
-              console.log('RESET PASSWORD LINK ERROR', err);
-              return res.status(400).json({
-                error:
-                  'Database connection error on user password forgot request'
-              });
-            } else {
-              sgMail
-                .send(emailData)
-                .then(sent => {
-                  // console.log('SIGNUP EMAIL SENT', sent)
-                  return res.json({
-                    message: `Email has been sent to ${email}. Follow the instruction to activate your account`
-                  });
-                })
-                .catch(err => {
-                  // console.log('SIGNUP EMAIL SENT ERROR', err)
-                  return res.json({
-                    message: err.message
-                  });
-                });
-            }
-          }
-        );
-      }
-    );
-  }
-};
 
 // exports.resetPasswordController = (req, res) => {
 //   const { resetPasswordLink, newPassword } = req.body;

@@ -31,6 +31,13 @@ const userSchema = new mongoose.Schema({
         unique: true,
        lowercase: true
     },
+    email_verified: {
+        type: String,
+        required: true,
+        trim: true,
+        unique: true,
+       lowercase: true
+    },
     hash_password:{
         type: String,
         required: true,
@@ -40,6 +47,14 @@ const userSchema = new mongoose.Schema({
         enum:['user', 'admin'],
         default: 'user'
     },
+    resetToken:String,
+    expireToken:Date,
+
+    resetLink: {
+        data: String,
+        default: ''
+    },
+    
     contactNumber:{type: String},
     profilePicture:{type: String}
 
